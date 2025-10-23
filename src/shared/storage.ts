@@ -1,24 +1,18 @@
-// NOTE: This module is currently not in use and requires refactoring
-// The architecture has changed to use SessionStore directly instead of this abstraction layer
-
-/*
-import { 
-  createStores, 
-  SessionStore, 
-  MemoryStore, 
-  OverviewStore, 
-  DiagnosticsStore,
-  SessionInput,
-  MemoryInput,
-  OverviewInput,
-  DiagnosticInput,
-  SessionRow,
-  MemoryRow,
-  OverviewRow,
-  DiagnosticRow,
-  normalizeTimestamp
-} from '../services/sqlite/index.js';
-*/
+// =============================================================================
+// DEPRECATION NOTICE: This module is not in active use
+// =============================================================================
+// The architecture has evolved to use SessionStore directly instead of this
+// abstraction layer. The IStorageProvider interface and SQLiteStorageProvider
+// class are preserved for reference and potential future use, but are not
+// currently implemented or functional.
+//
+// MIGRATION GUIDE:
+// - Instead of: getStorageProvider() [REMOVED - was non-functional]
+// - Use: SessionStore directly from '../services/sqlite/SessionStore.js'
+//
+// The getStorageProvider() singleton function has been removed (v4.2.1) as it
+// unconditionally threw errors and had no active callers in the codebase.
+// =============================================================================
 
 import {
   SessionInput,
@@ -38,6 +32,7 @@ export type StorageBackend = 'sqlite' | 'jsonl';
 
 /**
  * Unified interface for storage operations
+ * NOTE: This is a reference interface - use SessionStore directly in practice
  */
 export interface IStorageProvider {
   backend: StorageBackend;
@@ -72,8 +67,8 @@ export interface IStorageProvider {
 
 /**
  * SQLite-based storage provider
- * NOTE: This class is currently not implemented and is kept for future compatibility
- * The actual implementation uses SessionStore directly
+ * NOTE: This class is not currently implemented - use SessionStore directly
+ * Kept as a reference interface for potential future abstraction needs
  */
 export class SQLiteStorageProvider implements IStorageProvider {
   public readonly backend = 'sqlite';
@@ -83,83 +78,66 @@ export class SQLiteStorageProvider implements IStorageProvider {
   }
 
   async createSession(_session: SessionInput): Promise<SessionRow> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async getSession(_sessionId: string): Promise<SessionRow | null> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async hasSession(_sessionId: string): Promise<boolean> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async getAllSessionIds(): Promise<Set<string>> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async getRecentSessions(_limit = 5): Promise<SessionRow[]> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async getRecentSessionsForProject(_project: string, _limit = 5): Promise<SessionRow[]> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async createMemory(_memory: MemoryInput): Promise<MemoryRow> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async createMemories(_memories: MemoryInput[]): Promise<void> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async getRecentMemories(_limit = 10): Promise<MemoryRow[]> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async getRecentMemoriesForProject(_project: string, _limit = 10): Promise<MemoryRow[]> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async hasDocumentId(_documentId: string): Promise<boolean> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async createOverview(_overview: OverviewInput): Promise<OverviewRow> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async upsertOverview(_overview: OverviewInput): Promise<OverviewRow> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async getRecentOverviews(_limit = 5): Promise<OverviewRow[]> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async getRecentOverviewsForProject(_project: string, _limit = 5): Promise<OverviewRow[]> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
 
   async createDiagnostic(_diagnostic: DiagnosticInput): Promise<DiagnosticRow> {
-    throw new Error('Not implemented');
+    throw new Error('Not implemented - use SessionStore directly');
   }
-}
-
-/**
- * Storage provider singleton
- */
-let storageProvider: IStorageProvider | null = null;
-
-/**
- * Get the configured storage provider (always SQLite)
- * NOTE: This function is not currently working. Use SessionStore directly instead.
- */
-export async function getStorageProvider(): Promise<IStorageProvider> {
-  if (storageProvider) {
-    return storageProvider;
-  }
-
-  throw new Error('SQLiteStorageProvider is not currently implemented. Use SessionStore directly.');
 }
