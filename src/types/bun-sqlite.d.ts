@@ -51,7 +51,6 @@ declare module 'bun:sqlite' {
 
     // Serialization
     serialize(attachedName?: string): Uint8Array;
-    static deserialize(data: Uint8Array, options?: DatabaseOptions): Database;
 
     // Extensions and advanced features
     loadExtension(path: string, entryPoint?: string): void;
