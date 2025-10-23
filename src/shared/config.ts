@@ -1,3 +1,6 @@
+// Declare build-time constant (replaced by esbuild --define)
+declare const __DEFAULT_PACKAGE_VERSION__: string | undefined;
+
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -6,7 +9,6 @@ import { fileURLToPath } from 'url';
 // Default values
 const DEFAULT_PACKAGE_NAME = 'claude-mem';
 // This MUST be replaced by build process with --define flag
-// @ts-ignore
 // For development, use fallback
 const DEFAULT_PACKAGE_VERSION = typeof __DEFAULT_PACKAGE_VERSION__ !== 'undefined' 
   ? __DEFAULT_PACKAGE_VERSION__ 

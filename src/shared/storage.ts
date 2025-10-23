@@ -1,3 +1,7 @@
+// NOTE: This module is currently not in use and requires refactoring
+// The architecture has changed to use SessionStore directly instead of this abstraction layer
+
+/*
 import { 
   createStores, 
   SessionStore, 
@@ -14,6 +18,18 @@ import {
   DiagnosticRow,
   normalizeTimestamp
 } from '../services/sqlite/index.js';
+*/
+
+import {
+  SessionInput,
+  MemoryInput,
+  OverviewInput,
+  DiagnosticInput,
+  SessionRow,
+  MemoryRow,
+  OverviewRow,
+  DiagnosticRow,
+} from '../services/sqlite/types.js';
 
 /**
  * Storage backend types
@@ -56,114 +72,80 @@ export interface IStorageProvider {
 
 /**
  * SQLite-based storage provider
+ * NOTE: This class is currently not implemented and is kept for future compatibility
+ * The actual implementation uses SessionStore directly
  */
 export class SQLiteStorageProvider implements IStorageProvider {
   public readonly backend = 'sqlite';
-  
-  private stores?: {
-    sessions: SessionStore;
-    memories: MemoryStore;
-    overviews: OverviewStore;
-    diagnostics: DiagnosticsStore;
-  };
-
-  private async getStores() {
-    if (!this.stores) {
-      this.stores = await createStores();
-    }
-    return this.stores;
-  }
 
   async isAvailable(): Promise<boolean> {
-    try {
-      await this.getStores();
-      return true;
-    } catch (error) {
-      return false;
-    }
+    throw new Error('SQLiteStorageProvider is not currently implemented. Use SessionStore directly.');
   }
 
-  async createSession(session: SessionInput): Promise<SessionRow> {
-    const stores = await this.getStores();
-    return stores.sessions.create(session);
+  async createSession(_session: SessionInput): Promise<SessionRow> {
+    throw new Error('Not implemented');
   }
 
-  async getSession(sessionId: string): Promise<SessionRow | null> {
-    const stores = await this.getStores();
-    return stores.sessions.getBySessionId(sessionId);
+  async getSession(_sessionId: string): Promise<SessionRow | null> {
+    throw new Error('Not implemented');
   }
 
-  async hasSession(sessionId: string): Promise<boolean> {
-    const stores = await this.getStores();
-    return stores.sessions.has(sessionId);
+  async hasSession(_sessionId: string): Promise<boolean> {
+    throw new Error('Not implemented');
   }
 
   async getAllSessionIds(): Promise<Set<string>> {
-    const stores = await this.getStores();
-    return stores.sessions.getAllSessionIds();
+    throw new Error('Not implemented');
   }
 
-  async getRecentSessions(limit = 5): Promise<SessionRow[]> {
-    const stores = await this.getStores();
-    return stores.sessions.getRecent(limit);
+  async getRecentSessions(_limit = 5): Promise<SessionRow[]> {
+    throw new Error('Not implemented');
   }
 
-  async getRecentSessionsForProject(project: string, limit = 5): Promise<SessionRow[]> {
-    const stores = await this.getStores();
-    return stores.sessions.getRecentForProject(project, limit);
+  async getRecentSessionsForProject(_project: string, _limit = 5): Promise<SessionRow[]> {
+    throw new Error('Not implemented');
   }
 
-  async createMemory(memory: MemoryInput): Promise<MemoryRow> {
-    const stores = await this.getStores();
-    return stores.memories.create(memory);
+  async createMemory(_memory: MemoryInput): Promise<MemoryRow> {
+    throw new Error('Not implemented');
   }
 
-  async createMemories(memories: MemoryInput[]): Promise<void> {
-    const stores = await this.getStores();
-    stores.memories.createMany(memories);
+  async createMemories(_memories: MemoryInput[]): Promise<void> {
+    throw new Error('Not implemented');
   }
 
-  async getRecentMemories(limit = 10): Promise<MemoryRow[]> {
-    const stores = await this.getStores();
-    return stores.memories.getRecent(limit);
+  async getRecentMemories(_limit = 10): Promise<MemoryRow[]> {
+    throw new Error('Not implemented');
   }
 
-  async getRecentMemoriesForProject(project: string, limit = 10): Promise<MemoryRow[]> {
-    const stores = await this.getStores();
-    return stores.memories.getRecentForProject(project, limit);
+  async getRecentMemoriesForProject(_project: string, _limit = 10): Promise<MemoryRow[]> {
+    throw new Error('Not implemented');
   }
 
-  async hasDocumentId(documentId: string): Promise<boolean> {
-    const stores = await this.getStores();
-    return stores.memories.hasDocumentId(documentId);
+  async hasDocumentId(_documentId: string): Promise<boolean> {
+    throw new Error('Not implemented');
   }
 
-  async createOverview(overview: OverviewInput): Promise<OverviewRow> {
-    const stores = await this.getStores();
-    return stores.overviews.create(overview);
+  async createOverview(_overview: OverviewInput): Promise<OverviewRow> {
+    throw new Error('Not implemented');
   }
 
-  async upsertOverview(overview: OverviewInput): Promise<OverviewRow> {
-    const stores = await this.getStores();
-    return stores.overviews.upsert(overview);
+  async upsertOverview(_overview: OverviewInput): Promise<OverviewRow> {
+    throw new Error('Not implemented');
   }
 
-  async getRecentOverviews(limit = 5): Promise<OverviewRow[]> {
-    const stores = await this.getStores();
-    return stores.overviews.getRecent(limit);
+  async getRecentOverviews(_limit = 5): Promise<OverviewRow[]> {
+    throw new Error('Not implemented');
   }
 
-  async getRecentOverviewsForProject(project: string, limit = 5): Promise<OverviewRow[]> {
-    const stores = await this.getStores();
-    return stores.overviews.getRecentForProject(project, limit);
+  async getRecentOverviewsForProject(_project: string, _limit = 5): Promise<OverviewRow[]> {
+    throw new Error('Not implemented');
   }
 
-  async createDiagnostic(diagnostic: DiagnosticInput): Promise<DiagnosticRow> {
-    const stores = await this.getStores();
-    return stores.diagnostics.create(diagnostic);
+  async createDiagnostic(_diagnostic: DiagnosticInput): Promise<DiagnosticRow> {
+    throw new Error('Not implemented');
   }
 }
-
 
 /**
  * Storage provider singleton
@@ -172,17 +154,12 @@ let storageProvider: IStorageProvider | null = null;
 
 /**
  * Get the configured storage provider (always SQLite)
+ * NOTE: This function is not currently working. Use SessionStore directly instead.
  */
 export async function getStorageProvider(): Promise<IStorageProvider> {
   if (storageProvider) {
     return storageProvider;
   }
 
-  const sqliteProvider = new SQLiteStorageProvider();
-  if (await sqliteProvider.isAvailable()) {
-    storageProvider = sqliteProvider;
-    return storageProvider;
-  }
-
-  throw new Error('SQLite storage backend unavailable');
+  throw new Error('SQLiteStorageProvider is not currently implemented. Use SessionStore directly.');
 }

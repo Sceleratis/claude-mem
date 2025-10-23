@@ -1,4 +1,4 @@
-import { Database as BunDatabase } from 'bun:sqlite';
+import BunDatabase from 'bun:sqlite';
 import { DATA_DIR, DB_PATH, ensureDir } from '../../shared/paths.js';
 
 // Type alias for better-sqlite3 compatibility
