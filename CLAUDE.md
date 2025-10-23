@@ -1,308 +1,416 @@
-# Claude-Mem: Persistent Memory for Claude Code
+# CLAUDE.md
 
-## Overview
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Claude-mem is a persistent memory compression system that preserves context across Claude Code sessions. It automatically captures tool usage observations, processes them through the Claude Agent SDK, and makes summaries available to future sessions.
+## Project Overview
 
-**Current Version**: 4.2.0
-**License**: AGPL-3.0
-**Author**: Alex Newman (@thedotmack)
+Claude-mem is a persistent memory system for Claude Code that captures tool executions, processes them via Claude Agent SDK, and injects context into future sessions. It operates as a plugin with 5 lifecycle hooks, a PM2-managed worker service, an MCP search server, and SQLite storage.
 
-## What It Does
+**Current Version**: 4.2.1
+**Tech Stack**: TypeScript, Node.js 18+, SQLite3 (better-sqlite3), Express.js, PM2, Claude Agent SDK
 
-Claude-mem operates as a Claude Code plugin that:
-- Captures every tool execution during your coding sessions
-- Processes observations using AI-powered compression
-- Generates session summaries when sessions end
-- Injects relevant context into future sessions
-- Provides full-text search across your entire project history
+## Critical Development Rules
 
-This creates a continuous memory system where Claude can learn from past sessions and maintain context across your entire project lifecycle.
+### Build and Deployment Pipeline
 
-## Architecture
+**IMPORTANT**: This project has TWO locations:
+1. **Development repository**: Where you're working now
+2. **Installed plugin**: `~/.claude/plugins/marketplaces/claude-mem-fork/`
 
-### Hook-Based Lifecycle System
+When making changes, you MUST:
 
-Claude-mem integrates with Claude Code through 5 lifecycle hooks:
+```bash
+# 1. Build the project (compiles TypeScript to plugin/scripts/)
+npm run build
 
-1. **SessionStart Hook** (`context-hook`)
-   - Injects context from previous sessions
-   - Auto-starts PM2 worker service
-   - Retrieves last 10 session summaries with three-tier verbosity (v4.2.0)
-   - Fixed in v4.1.0 to use proper JSON hookSpecificOutput format
+# 2. Copy built worker to installed plugin location
+cp plugin/scripts/worker-service.cjs ~/.claude/plugins/marketplaces/claude-mem-fork/plugin/scripts/worker-service.cjs
 
-2. **UserPromptSubmit Hook** (`new-hook`)
-   - Creates new session records
-   - Initializes session tracking
-   - Saves raw user prompts for full-text search (as of v4.2.0)
+# 3. Restart the PM2 worker
+npx pm2 flush claude-mem-worker && npx pm2 restart claude-mem-worker
 
-3. **PostToolUse Hook** (`save-hook`)
-   - Captures tool execution observations
-   - Sends observations to worker service for processing
+# 4. Check logs to verify fix
+npx pm2 logs claude-mem-worker --lines 30 --nostream
+```
 
-4. **Summary Hook**
-   - Generates AI-powered session summaries
-   - Processes accumulated observations
+**Why this matters**: The PM2 worker runs the built code from the plugin directory, NOT your local development code. If you don't copy the rebuilt files, your changes won't take effect.
 
-5. **SessionEnd Hook** (`cleanup-hook`)
-   - Marks sessions as completed (graceful cleanup as of v4.1.0)
-   - Skips cleanup on `/clear` commands to preserve ongoing sessions
-   - Previously sent DELETE requests; now allows workers to finish naturally
+### Cross-Platform Path Handling
+
+**NEVER hardcode paths to Claude Code executable**. Always use the shared `findClaudeExecutable()` function from `src/utils/cli.ts`:
+
+```typescript
+import { findClaudeExecutable } from '../utils/cli.js';
+
+// Good:
+const claudePath = findClaudeExecutable();
+
+// Bad:
+const claudePath = '/Users/someone/.nvm/versions/node/v24.5.0/bin/claude';
+const claudePath = 'C:\\Users\\someone\\.local\\bin\\claude.exe';
+```
+
+The function searches in this order:
+1. `CLAUDE_CODE_PATH` environment variable
+2. System PATH (using `which`/`where` command)
+3. Common installation paths (OS-specific)
+
+### Database Abstraction Layer is Deprecated
+
+**IMPORTANT**: `src/shared/storage.ts` is deprecated and throws errors. Always use `SessionStore` directly:
+
+```typescript
+// Good:
+import { SessionStore } from '../services/sqlite/SessionStore.js';
+const store = new SessionStore();
+
+// Bad:
+import { getStorageProvider } from '../shared/storage.js'; // This will throw errors
+```
+
+`SessionStore` uses better-sqlite3 as the primary database implementation. `Database.ts` (which uses bun:sqlite) is legacy code.
+
+## Common Development Tasks
+
+### Building the Project
+
+```bash
+# Build all hooks, worker service, and search server
+npm run build
+
+# Output location: plugin/scripts/
+# - Hooks: *-hook.js
+# - Worker: worker-service.cjs
+# - Search: search-server.js
+```
+
+### Managing the Worker Service
+
+```bash
+# Check status
+npx pm2 status claude-mem-worker
+
+# View logs (last 30 lines)
+npx pm2 logs claude-mem-worker --lines 30 --nostream
+
+# View only errors
+npx pm2 logs claude-mem-worker --err --lines 10 --nostream
+
+# Restart worker
+npx pm2 restart claude-mem-worker
+
+# Flush logs (clear old logs)
+npx pm2 flush claude-mem-worker
+```
+
+### Checking Database Contents
+
+```bash
+# Recent observations
+node -e "
+const Database = require('better-sqlite3');
+const db = new Database('C:/Users/sky_p/.claude-mem/claude-mem.db', { readonly: true });
+console.log('Recent Observations:');
+const obs = db.prepare('SELECT id, type, title, created_at FROM observations ORDER BY created_at_epoch DESC LIMIT 5').all();
+obs.forEach(o => console.log(\`  [\${o.type}] \${o.title} (ID: \${o.id})\`));
+db.close();
+"
+
+# Recent summaries
+node -e "
+const Database = require('better-sqlite3');
+const db = new Database('C:/Users/sky_p/.claude-mem/claude-mem.db', { readonly: true });
+console.log('Recent Summaries:');
+const sums = db.prepare('SELECT id, request, completed FROM session_summaries ORDER BY created_at_epoch DESC LIMIT 3').all();
+sums.forEach(s => console.log(\`  \${s.request} (completed: \${s.completed})\`));
+db.close();
+"
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Test context injection (simulates SessionStart hook)
+npm run test:context
+
+# Verbose output
+npm run test:context:verbose
+
+# Run specific test file
+node --test tests/session-lifecycle.test.ts
+```
+
+### TypeScript Verification
+
+```bash
+# Check for TypeScript errors without emitting
+npx tsc --noEmit
+```
+
+## Architecture Deep-Dive
+
+### Hook Execution Flow
+
+```
+User starts Claude Code
+  ↓
+SessionStart Hook (context-hook.js)
+  → Queries database for last 10 session summaries
+  → Injects context via hookSpecificOutput JSON
+  → Auto-starts PM2 worker if not running
+  ↓
+User types prompt
+  ↓
+UserPromptSubmit Hook (new-hook.js)
+  → Creates/retrieves SDK session record
+  → Saves raw user prompt to user_prompts table (v4.2.0+)
+  → Sends init signal to worker service
+  ↓
+Claude executes tools (Read, Write, Bash, Edit, etc.)
+  ↓
+PostToolUse Hook (save-hook.js) - fires after EACH tool
+  → Sends observation to worker service HTTP endpoint
+  → Worker queues observation for SDK processing
+  ↓
+Claude stops (user presses stop button)
+  ↓
+Summary Hook (summary-hook.js)
+  → Requests summary generation from worker
+  → Worker processes all observations via Claude Agent SDK
+  → Generates final summary with learnings/decisions
+  ↓
+Session ends (user closes or /clear)
+  ↓
+SessionEnd Hook (cleanup-hook.js)
+  → Marks session as completed (graceful cleanup)
+  → Skips cleanup on /clear to preserve ongoing sessions
+```
 
 ### Worker Service Architecture
 
-- **Technology**: HTTP REST API built with Express.js, managed by PM2
-- **Port**: Fixed port 37777 (configurable via CLAUDE_MEM_WORKER_PORT)
-- **Location**: `src/services/worker-service.ts`
-- **Configurable Model**: Uses `CLAUDE_MEM_MODEL` environment variable (default: claude-sonnet-4-5)
+**Port**: Fixed at 37777 (configurable via `CLAUDE_MEM_WORKER_PORT`)
+**Process Manager**: PM2 (configured in `ecosystem.config.cjs`)
+**HTTP Framework**: Express.js
 
-**REST API Endpoints** (6 total):
-- Session management endpoints
-- Observation processing endpoints
-- Worker port tracking
+**Key Design Decision**: Worker runs as a separate process to avoid hook timeout issues. Hooks communicate via HTTP REST API, allowing async processing without blocking Claude.
 
-The worker service runs as a PM2-managed background process that handles AI processing separately from the hook execution, preventing hook timeout issues.
+**REST API Endpoints**:
+- `POST /sessions/:id/init` - Initialize SDK session
+- `POST /sessions/:id/observations` - Queue tool observations
+- `POST /sessions/:id/summarize` - Generate summary
+- `GET /sessions/:id/status` - Check status
+- `DELETE /sessions/:id` - Clean up session
+- `GET /health` - Health check
 
-### Database Layer
+### Database Schema (SQLite)
 
-**Technology**: SQLite 3 with better-sqlite3 native module
 **Location**: `~/.claude-mem/claude-mem.db`
-
-**Note**: SessionStore and SessionSearch use better-sqlite3 as the primary database implementation. Database.ts (which uses bun:sqlite) is legacy code.
+**Mode**: WAL (Write-Ahead Logging) for better concurrency
 
 **Core Tables**:
-- `sdk_sessions` - Session tracking with prompt counters
-- `session_summaries` - AI-generated session summaries (multiple per session)
-- `observations` - Captured tool usage with structured fields
-- `user_prompts` - Raw user prompts with FTS5 search (as of v4.2.0)
+- `sdk_sessions` - Session tracking (status, project, prompt_counter)
+- `observations` - Individual tool executions with hierarchical fields
+- `session_summaries` - AI-generated summaries (multiple per session)
+- `user_prompts` - Raw user prompts with FTS5 search (v4.2.0+)
 
-**Schema Features**:
-- FTS5 (Full-Text Search) virtual tables for fast searching
-- Automatic sync triggers between main tables and FTS5 tables
-- Support for multi-prompt sessions (prompt_counter, prompt_number)
-- Hierarchical observations (title, subtitle, facts, narrative, concepts, files_read, files_modified)
-- Observation types: decision, bugfix, feature, refactor, discovery, change
+**FTS5 Virtual Tables** (for full-text search):
+- `observations_fts` - Synced via triggers
+- `session_summaries_fts` - Synced via triggers
+- `user_prompts_fts` - Synced via triggers (v4.2.0+)
 
-**Database Classes**:
-- `SessionStore` - CRUD operations for sessions, observations, summaries, user prompts
-- `SessionSearch` - FTS5 full-text search with 8 search methods
+**Observation Structure**:
+- `title` - Short description
+- `subtitle` - Additional context (optional)
+- `narrative` - Full explanation
+- `facts` - JSON array of key facts
+- `concepts` - JSON array of tags/concepts
+- `files_read` - JSON array of file paths read
+- `files_modified` - JSON array of file paths modified
+- `type` - One of: decision, bugfix, feature, refactor, discovery, change
 
 ### MCP Search Server
 
-**Location**: `src/servers/search-server.ts`
 **Configuration**: `plugin/.mcp.json`
+**Entry Point**: `plugin/scripts/search-server.js`
+**Transport**: stdio (communicates with Claude Code via stdin/stdout)
 
-Exposes 8 specialized search tools to Claude:
+**8 Search Tools**:
+1. `search_observations` - Full-text search across observations
+2. `search_sessions` - Full-text search across session summaries
+3. `search_user_prompts` - Full-text search across raw user prompts
+4. `find_by_concept` - Find observations with specific concept tags
+5. `find_by_file` - Find observations/sessions referencing file paths
+6. `find_by_type` - Find observations by type (decision/bugfix/etc.)
+7. `get_recent_context` - Get recent session context for a project
+8. `advanced_search` - Combined search with multiple filters
 
-1. **search_observations** - Full-text search across observations
-2. **search_sessions** - Full-text search across session summaries
-3. **search_user_prompts** - Full-text search across raw user prompts (as of v4.2.0)
-4. **find_by_concept** - Find observations tagged with specific concepts
-5. **find_by_file** - Find observations referencing specific file paths
-6. **find_by_type** - Find observations by type (decision/bugfix/feature/etc.)
-7. **get_recent_context** - Get recent session context including summaries and observations for a project
-8. **advanced_search** - Combine multiple filters with full-text search
+**Citation Scheme**: `claude-mem://observation/{id}` or `claude-mem://session/{id}`
 
-**Search Pipeline**:
-```
-Claude Request → MCP Server → SessionSearch Service → FTS5 Database → Results → Claude
-```
+## Key Files and Their Purposes
 
-**Citations**: All search results use the `claude-mem://` URI scheme for referencing specific observations and sessions.
+### Hook Entry Points (src/bin/hooks/)
+- `context-hook.ts` - SessionStart: Injects past context
+- `new-hook.ts` - UserPromptSubmit: Creates session, saves user prompt
+- `save-hook.ts` - PostToolUse: Captures tool observations
+- `summary-hook.ts` - Stop: Generates session summary
+- `cleanup-hook.ts` - SessionEnd: Marks session complete
 
-## Installation
+### Hook Implementations (src/hooks/)
+Contains the actual logic for each hook, separated from entry points for testability.
 
-### Requirements
-- Node.js 18+
-- Claude Code plugin system
+### Worker Service (src/services/)
+- `worker-service.ts` - Express HTTP server, session management, PM2 entry point
+- `sqlite/SessionStore.ts` - Primary database interface (better-sqlite3)
+- `sqlite/SessionSearch.ts` - FTS5 full-text search service
+- `sqlite/migrations.ts` - Database schema migrations
+- `sqlite/Database.ts` - Legacy (bun:sqlite) - DO NOT USE
 
-### Installation Method
+### SDK Integration (src/sdk/)
+- `worker.ts` - Unix socket server, processes observations via Claude Agent SDK
+- `prompts.ts` - XML prompt builders for init/observation/summary
+- `parser.ts` - XML response parser for structured data extraction
 
-**Local Marketplace Installation** (recommended as of v4.0.4+):
+### MCP Server (src/servers/)
+- `search-server.ts` - MCP server exposing 8 search tools
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/thedotmack/claude-mem.git
-cd claude-mem
+### Utilities (src/utils/)
+- `cli.ts` - **CRITICAL**: Cross-platform Claude executable finder
+- `logger.ts` - Structured logging with color output
+- `port-allocator.ts` - Dynamic port allocation for worker service
 
-# 2. Add to Claude Code marketplace
-/plugin marketplace add .claude-plugin/marketplace.json
+### Shared (src/shared/)
+- `paths.ts` - Data directory and database path constants
+- `config.ts` - Configuration loading
+- `storage.ts` - **DEPRECATED**: Do not use, throws errors
 
-# 3. Install the plugin
-/plugin install claude-mem
-```
+### Build Scripts (scripts/)
+- `build-hooks.js` - Builds all hooks, worker, and search server using esbuild
 
-## Configuration
+### Configuration Files
+- `ecosystem.config.cjs` - PM2 configuration (logs, restart policy, port)
+- `tsconfig.json` - TypeScript compiler options
+- `package.json` - Dependencies, scripts, version
+- `plugin/.mcp.json` - MCP server registration
+- `plugin/hooks/hooks.json` - Hook definitions for Claude Code
 
-### Model Selection
+## Database Migrations
 
-Configure which AI model processes your observations:
+Migrations are handled in `SessionStore` constructor:
+1. `initializeSchema()` - Creates base tables if fresh database
+2. `ensureWorkerPortColumn()` - Migration 5
+3. `ensurePromptTrackingColumns()` - Migration 6
+4. `removeSessionSummariesUniqueConstraint()` - Migration 7
+5. `addObservationHierarchicalFields()` - Migration 8
+6. `makeObservationsTextNullable()` - Migration 9
+7. `createUserPromptsTable()` - Migration 10 (v4.2.0)
 
-**Using the interactive script**:
-```bash
-./claude-mem-settings.sh
-```
+**Adding a New Migration**:
+1. Add method to `SessionStore` class
+2. Call in constructor after existing migrations
+3. Use `schema_versions` table to track applied migrations
+4. Make migrations idempotent (safe to run multiple times)
 
-**Available models**:
-- `claude-haiku-4-5` - Fast, cost-efficient
-- `claude-sonnet-4-5` - Balanced (default)
-- `claude-opus-4` - Most capable
-- `claude-3-7-sonnet` - Alternative version
+## Known Issues and Workarounds
 
-The script manages `CLAUDE_MEM_MODEL` in `~/.claude/settings.json`.
-TODO: also have script create and manage `CLAUDE_MEM_MODEL` in `~/.claude/plugins/marketplaces/thedotmack/.env` so our worker script has access to the value (we may not even need it in our settings but only in our plugin folder since hooks shouldn't be calling queries, not sure).
+### Windows Exit Code 3221225786 (STATUS_ACCESS_VIOLATION)
 
-## Data Flow
+**Symptom**: Blank terminal windows spawn when SDK tries to use Claude executable
 
-### Memory Pipeline
-```
-Tool Execution → Hook Capture → Worker Processing → AI Compression → Database Storage → Future Context Injection
-```
+**Root Cause**: Windows-specific issue with Claude Agent SDK process spawning
 
-### Search Pipeline
-```
-Search Query → MCP Server → SessionSearch → FTS5 Query → Results with Citations
-```
+**Impact**: Cosmetic annoyance - does NOT prevent memory system from working. Observations are still captured despite these errors.
 
-## Development
+**Status**: Known issue, no fix currently available
 
-### Directory Structure
-```
-claude-mem/
-├── src/
-│   ├── bin/hooks/          # Hook entry points
-│   ├── hooks/              # Hook implementations
-│   ├── services/           # Worker service
-│   ├── services/sqlite/    # Database layer
-│   ├── servers/            # MCP search server
-│   ├── sdk/                # Claude Agent SDK integration
-│   ├── shared/             # Shared utilities
-│   └── utils/              # General utilities
-├── plugin/                 # Built plugin files
-│   ├── scripts/            # Built hook executables
-│   └── .mcp.json          # MCP server configuration
-└── .claude-plugin/        # Plugin metadata
-    └── marketplace.json   # Marketplace definition
-```
+### Import.meta Warning During Build
 
-### Technology Stack
-- **Language**: TypeScript
-- **Database**: SQLite 3 with better-sqlite3
-- **HTTP**: Express.js
-- **Process Management**: PM2
-- **AI SDK**: @anthropic-ai/claude-agent-sdk (v0.1.23)
-- **MCP SDK**: @modelcontextprotocol/sdk (v1.20.1)
-- **Schema Validation**: zod-to-json-schema (v3.24.6)
+**Symptom**: Warning about `import.meta` with "cjs" output format in `src/shared/paths.ts:14:31`
 
-### Build Process
-```bash
-npm run build && git commit -a -m "Build and update" && git push && cd ~/.claude/plugins/marketplaces/thedotmack/ && git pull && pm2 flush claude-mem-worker && pm2 restart claude-mem-worker && pm2 logs claude-mem-worker --nostream
-```
+**Impact**: Non-critical build warning, doesn't affect functionality
 
-1) Compiles TypeScript and outputs hook executables to `plugin/scripts/`
-2) Does all the things needed to update and test since plugin-based installs are out of the .claude/ folder
+**Status**: Expected warning due to ESM/CJS interop
 
-## Version History
+## Troubleshooting Guide
 
-### v4.2.0 (Current)
-**Breaking Changes**: None (minor version)
+### Worker Not Processing Observations
 
-**Features**:
+1. Check PM2 status: `npx pm2 status`
+2. View error logs: `npx pm2 logs claude-mem-worker --err --lines 30 --nostream`
+3. Common issue: Old built code running - rebuild and copy worker-service.cjs
+4. Restart worker: `npx pm2 restart claude-mem-worker`
+
+### TypeScript Compilation Errors
+
+1. Run `npx tsc --noEmit` to see all errors
+2. Common issues:
+   - Missing type declarations (create in `src/types/`)
+   - Incorrect function signatures (check SDK version)
+   - Import path issues (use `.js` extension for imports)
+
+### Database Locked Errors
+
+1. Stop PM2 worker: `npx pm2 stop claude-mem-worker`
+2. Check for stale connections: `lsof ~/.claude-mem/claude-mem.db` (macOS/Linux)
+3. Restart worker: `npx pm2 start ecosystem.config.cjs`
+
+### Hooks Not Firing
+
+1. Check `plugin/scripts/` for built executables
+2. Verify permissions: `ls -la plugin/scripts/*.js`
+3. Test manually: `echo '{"session_id":"test-123","cwd":"'$(pwd)'","source":"startup"}' | node plugin/scripts/context-hook.js`
+
+## Version History Notes
+
+### v4.2.0 → v4.2.1 (Current)
 - User prompt storage with FTS5 full-text search
-- New `user_prompts` table stores raw user input for every prompt
-- New `search_user_prompts` MCP tool enables searching actual user requests
-- Automatic FTS5 indexing of all user prompts for fast retrieval
-
-**Benefits**:
-- Full context reconstruction from user intent → Claude actions → outcomes
-- Pattern detection for repeated requests (identify when Claude isn't listening)
-- Improved debugging by tracing from original user words to final implementation
-- Historical search: "How many times did user ask for X feature?"
-
-**Implementation**:
-- Migration 10: Creates user_prompts table with FTS5 virtual table and sync triggers
-- UserPromptSubmit hook now saves prompts using claude_session_id (available immediately)
-- Citations use `claude-mem://user-prompt/{id}` URI scheme
+- New `user_prompts` table and `search_user_prompts` MCP tool
+- Migration 10: Creates user_prompts with FTS5 indexing
+- Citations: `claude-mem://user-prompt/{id}` URI scheme
 
 ### v4.1.0
-**Breaking Changes**: None (minor version)
-
-**Features**:
-- Graceful session cleanup (marks complete instead of DELETE)
-- Restored MCP search server from backup
-- Updated dependencies (claude-agent-sdk 0.1.23, MCP SDK 1.20.1)
-
-**Fixes**:
-- `/clear` command now skips cleanup to prevent session interruption
-- Session workers can finish pending operations naturally
+- Graceful session cleanup (marks complete vs DELETE)
+- Fixed `/clear` command session interruption
 
 ### v4.0.0
-**Breaking Changes**:
+- MCP Search Server with 8 specialized tools
 - Data directory relocated to `${CLAUDE_PLUGIN_ROOT}/data/`
-- Fresh start required (no migration from v3.x)
 - Worker auto-starts in SessionStart hook
+- HTTP REST API architecture
 
-**Features**:
-- MCP Search Server with 8 specialized search tools
-- FTS5 full-text search across observations, sessions, and user prompts
-- Citation support with `claude-mem://` URIs
-- HTTP REST API architecture with PM2 management
-- Plugin data directory integration
+### v3.x
+- Legacy SQLite storage backend
+- Mintlify documentation (removed in v4.0)
+- Data stored in `~/.claude-mem/` (changed in v4.0)
 
-**Changes**:
-- Improved session continuity
-- Enhanced error handling
-- Better process cleanup
+## Important Architectural Decisions
 
-### Earlier Versions (v3.x)
-- v3.9.17: MCP integration, hookSpecificOutput JSON format
-- v3.7.1: SQLite storage backend
-- Earlier: Mintlify documentation, statusline support
+### Why HTTP REST API for Worker Communication?
 
-## Key Design Decisions
+**Problem**: Hooks have strict timeout limits (60-180s). Processing observations via Claude Agent SDK can take longer.
 
-### Graceful Cleanup (v4.1.0)
-Changed from aggressive session deletion (HTTP DELETE to workers) to graceful completion (marking sessions complete and allowing workers to finish). This prevents interruption of important operations like summary generation.
+**Solution**: Hooks send observations to worker service via HTTP POST, then exit immediately. Worker processes asynchronously without blocking hooks.
 
-### FTS5 for Search Performance
-Implements SQLite FTS5 (Full-Text Search) virtual tables with automatic synchronization triggers, enabling fast full-text search across thousands of observations without performance degradation.
+### Why PM2 Process Management?
 
-### Multi-Prompt Session Support
-Tracks `prompt_counter` and `prompt_number` across sessions and observations, enabling context preservation across conversation restarts within the same coding session.
+**Problem**: Worker service needs to survive across multiple Claude Code sessions. Node.js doesn't have built-in daemon support.
 
-## Troubleshooting
+**Solution**: PM2 manages worker as long-running background process with auto-restart, log rotation, and graceful shutdown.
 
-### Worker Service Issues
-- Check PM2 status: `pm2 list`
-- View logs: `npm run worker:logs`
-- Restart worker: `npm run worker:restart`
+### Why FTS5 Full-Text Search?
 
-### Database Issues
-- Database location: `~/.claude-mem/claude-mem.db`
-- Check schema: `sqlite3 <db-path> ".schema"`
-- FTS5 tables are automatically synchronized via triggers
+**Problem**: Searching thousands of observations with LIKE queries is slow and inflexible.
 
-### Hook Issues
-- Hooks output to Claude Code's hook execution log
-- Check `plugin/scripts/` for built executables
+**Solution**: SQLite FTS5 virtual tables provide fast full-text search with relevance ranking. Automatic sync triggers keep FTS5 tables in sync with main tables.
 
-### Model Configuration Issues
-- Use `./claude-mem-settings.sh` to manage model settings
-- Settings stored in `~/.claude/settings.json`
-- Default fallback: `claude-sonnet-4-5`
+### Why Graceful Cleanup Instead of DELETE?
 
-## Citations & References
+**Problem**: Aggressive session deletion (HTTP DELETE) interrupted summary generation when users ran `/clear`.
 
-This project uses the `claude-mem://` URI scheme for citations:
-- `claude-mem://observation/{id}` - References specific observations
-- `claude-mem://session/{id}` - References specific sessions
-
-All MCP search results include citations, enabling Claude to reference specific historical context.
+**Solution**: SessionEnd hook now marks sessions complete and lets workers finish naturally. Skips cleanup on `/clear` commands to preserve ongoing work.
 
 ## License
 
-AGPL-3.0
-
-## Repository
-
-https://github.com/thedotmack/claude-mem
+AGPL-3.0 - See LICENSE file for details

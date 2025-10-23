@@ -11,6 +11,22 @@ declare global {
   }
 }
 
+// Monkey-patch child_process to hide windows on Windows
+// This prevents blank terminal windows from spawning when SDK spawns Claude
+import * as cp from 'child_process';
+import { platform } from 'os';
+
+if (platform() === 'win32') {
+  const originalSpawn = cp.spawn;
+  (cp as any).spawn = function(...args: any[]) {
+    const options = args[2] || {};
+    // Add windowsHide to prevent console windows from appearing
+    options.windowsHide = true;
+    args[2] = options;
+    return originalSpawn.apply(this, args as any);
+  };
+}
+
 import net from 'net';
 import { unlinkSync, existsSync } from 'fs';
 import { query } from '@anthropic-ai/claude-agent-sdk';
