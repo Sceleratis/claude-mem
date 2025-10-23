@@ -105,24 +105,32 @@ npx pm2 flush claude-mem-worker
 
 ### Checking Database Contents
 
+**Database Location**: `~/.claude-mem/claude-mem.db` (expands to `${HOME}/.claude-mem/claude-mem.db` on Unix/macOS or `%USERPROFILE%\.claude-mem\claude-mem.db` on Windows)
+
 ```bash
-# Recent observations
+# Recent observations (cross-platform)
 node -e "
 const Database = require('better-sqlite3');
-const db = new Database('C:/Users/sky_p/.claude-mem/claude-mem.db', { readonly: true });
+const path = require('path');
+const os = require('os');
+const dbPath = path.join(os.homedir(), '.claude-mem', 'claude-mem.db');
+const db = new Database(dbPath, { readonly: true });
 console.log('Recent Observations:');
 const obs = db.prepare('SELECT id, type, title, created_at FROM observations ORDER BY created_at_epoch DESC LIMIT 5').all();
 obs.forEach(o => console.log(\`  [\${o.type}] \${o.title} (ID: \${o.id})\`));
 db.close();
 "
 
-# Recent summaries
+# Recent summaries (cross-platform)
 node -e "
 const Database = require('better-sqlite3');
-const db = new Database('C:/Users/sky_p/.claude-mem/claude-mem.db', { readonly: true });
+const path = require('path');
+const os = require('os');
+const dbPath = path.join(os.homedir(), '.claude-mem', 'claude-mem.db');
+const db = new Database(dbPath, { readonly: true });
 console.log('Recent Summaries:');
-const sums = db.prepare('SELECT id, request, completed FROM session_summaries ORDER BY created_at_epoch DESC LIMIT 3').all();
-sums.forEach(s => console.log(\`  \${s.request} (completed: \${s.completed})\`));
+const sums = db.prepare('SELECT id, request, learned FROM session_summaries ORDER BY created_at_epoch DESC LIMIT 3').all();
+sums.forEach(s => console.log(\`  \${s.request}\n  Learned: \${s.learned ? s.learned.substring(0, 80) + '...' : 'N/A'}\`));
 db.close();
 "
 ```

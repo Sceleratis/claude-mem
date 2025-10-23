@@ -3,6 +3,23 @@
  * Replaces detached Bun worker processes with single persistent Node service
  */
 
+// Monkey-patch child_process to hide windows on Windows BEFORE any imports
+// This prevents blank terminal windows from spawning when SDK spawns Claude
+// Must use require() instead of import because imports are immutable
+const cp = require('child_process');
+const { platform } = require('os');
+
+if (platform() === 'win32') {
+  const originalSpawn = cp.spawn;
+  cp.spawn = function(...args: any[]) {
+    const options = args[2] || {};
+    // Add windowsHide to prevent console windows from appearing
+    options.windowsHide = true;
+    args[2] = options;
+    return originalSpawn.apply(this, args as any);
+  };
+}
+
 import express, { Request, Response } from 'express';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { SDKUserMessage, SDKSystemMessage } from '@anthropic-ai/claude-agent-sdk';
