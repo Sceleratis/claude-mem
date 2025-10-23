@@ -83,7 +83,9 @@ export async function cleanupHook(input?: SessionEndInput): Promise<void> {
 
     console.error('[claude-mem cleanup] Cleanup completed successfully');
     console.log('{"continue": true, "suppressOutput": true}');
-    process.exit(0);
+    // Let Node.js exit naturally instead of forcing process.exit(0)
+    // This prevents UV_HANDLE_CLOSING assertion errors on Windows when stdin handlers close
+    return;
 
   } catch (error: any) {
     // On error, don't block Claude Code exit
@@ -93,6 +95,8 @@ export async function cleanupHook(input?: SessionEndInput): Promise<void> {
       name: error.name
     });
     console.log('{"continue": true, "suppressOutput": true}');
-    process.exit(0);
+    // Let Node.js exit naturally instead of forcing process.exit(0)
+    // This prevents UV_HANDLE_CLOSING assertion errors on Windows when stdin handlers close
+    return;
   }
 }

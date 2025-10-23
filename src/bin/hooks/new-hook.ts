@@ -13,5 +13,5 @@ stdin.on('data', (chunk) => input += chunk);
 stdin.on('end', async () => {
   const parsed = input.trim() ? JSON.parse(input) : undefined;
   await newHook(parsed);
-  process.exit(0);
+  // Let Node.js exit naturally - prevents UV_HANDLE_CLOSING assertion on Windows
 });

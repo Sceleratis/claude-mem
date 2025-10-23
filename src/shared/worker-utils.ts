@@ -2,6 +2,7 @@ import path from 'path';
 import { existsSync } from 'fs';
 import { spawn } from 'child_process';
 import { getPackageRoot } from './paths.js';
+import { platform } from 'os';
 
 const FIXED_PORT = parseInt(process.env.CLAUDE_MEM_WORKER_PORT || '37777', 10);
 const HEALTH_CHECK_URL = `http://127.0.0.1:${FIXED_PORT}/health`;
@@ -46,7 +47,12 @@ export async function ensureWorkerRunning(): Promise<boolean> {
 
     // Start worker with PM2 (bundled dependency)
     const ecosystemPath = path.join(packageRoot, 'ecosystem.config.cjs');
-    const pm2Path = path.join(packageRoot, 'node_modules', '.bin', 'pm2');
+    let pm2Path = path.join(packageRoot, 'node_modules', '.bin', 'pm2');
+    // On Windows, use the .cmd wrapper instead of the shell script
+    if (platform() === 'win32') {
+      pm2Path = pm2Path + '.cmd';
+    }
+
 
     // Fail loudly if bundled pm2 is missing
     if (!existsSync(pm2Path)) {
@@ -67,7 +73,8 @@ export async function ensureWorkerRunning(): Promise<boolean> {
     const proc = spawn(pm2Path, ['start', ecosystemPath], {
       detached: true,
       stdio: 'ignore',
-      cwd: packageRoot
+      cwd: packageRoot,
+      shell: true  // Use shell on Windows to execute .cmd files
     });
 
     // Fail loudly on spawn errors

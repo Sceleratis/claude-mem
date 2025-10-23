@@ -15,7 +15,7 @@ try {
     // Running manually from terminal - print formatted output with colors
     const contextOutput = contextHook(undefined, true, useIndexView);
     console.log(contextOutput);
-    process.exit(0);
+    // Let Node.js exit naturally - prevents UV_HANDLE_CLOSING assertion on Windows
   } else {
     // Running from hook - wrap in JSON format without colors
     let input = '';
@@ -30,10 +30,10 @@ try {
         }
       };
       console.log(JSON.stringify(result));
-      process.exit(0);
+      // Let Node.js exit naturally - prevents UV_HANDLE_CLOSING assertion on Windows
     });
   }
 } catch (error: any) {
   console.error(`[claude-mem context-hook error: ${error.message}]`);
-  process.exit(0);
+  // Let Node.js exit naturally - prevents UV_HANDLE_CLOSING assertion on Windows
 }
