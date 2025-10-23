@@ -1,11 +1,11 @@
 {
-  "name": "thedotmack",
+  "name": "claude-mem-fork",
   "owner": {
     "name": "Alex Newman"
   },
   "metadata": {
     "description": "Plugins by Alex Newman (thedotmack)",
-    "homepage": "https://github.com/thedotmack/claude-mem"
+    "homepage": "https://github.com/Sceleratis/claude-mem"
   },
   "plugins": [
     {
