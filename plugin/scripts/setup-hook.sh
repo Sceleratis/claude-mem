@@ -34,18 +34,12 @@ normalize_path() {
     # Convert backslashes to forward slashes
     path="${path//\//}"
     
-    # Convert Windows drive letter (C: -> /mnt/c or /c)
+    # Convert Windows drive letter (C: -> /c)
+    # Git Bash uses /c, /d, etc (not /mnt/c)
     if [[ "$path" =~ ^([A-Za-z]): ]]; then
         local drive="${BASH_REMATCH[1]}"
         drive=$(echo "$drive" | tr '[:upper:]' '[:lower:]')
-        
-        # Try /mnt/c style first (WSL style)
-        if [[ -d "/mnt/$drive" ]]; then
-            path="/mnt/$drive${path#[A-Za-z]:}"
-        else
-            # Fall back to /c style (Git Bash style)
-            path="/$drive${path#[A-Za-z]:}"
-        fi
+        path="/$drive${path#[A-Za-z]:}"
     fi
     
     echo "$path"
@@ -53,19 +47,15 @@ normalize_path() {
 
 # Main logic
 main() {
-    log_debug "CLAUDE_PLUGIN_ROOT: ${CLAUDE_PLUGIN_ROOT:-<not set>}"
+    # Determine script directory (where this script is located)
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    log_debug "Script directory: $SCRIPT_DIR"
     
-    # Check if CLAUDE_PLUGIN_ROOT is set
-    if [[ -z "${CLAUDE_PLUGIN_ROOT:-}" ]]; then
-        log_error "CLAUDE_PLUGIN_ROOT environment variable is not set"
-        exit 1
-    fi
+    # Plugin root is two levels up from scripts directory
+    PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+    log_debug "Plugin root: $PLUGIN_ROOT"
     
-    # Normalize the plugin root path
-    PLUGIN_ROOT=$(normalize_path "$CLAUDE_PLUGIN_ROOT")
-    log_debug "Normalized PLUGIN_ROOT: $PLUGIN_ROOT"
-    
-    # Navigate to plugin parent directory
+    # Navigate to plugin parent directory for npm install
     PLUGIN_PARENT="$PLUGIN_ROOT/.."
     log_debug "Plugin parent directory: $PLUGIN_PARENT"
     
