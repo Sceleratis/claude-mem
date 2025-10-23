@@ -15,65 +15,14 @@ import net from 'net';
 import { unlinkSync, existsSync } from 'fs';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { SDKUserMessage, SDKSystemMessage } from '@anthropic-ai/claude-agent-sdk';
-import { execSync } from 'child_process';
-import { join } from 'path';
-import { homedir, platform } from 'os';
+import { logger } from '../utils/logger.js';
+import { findClaudeExecutable } from '../utils/cli.js';
 import { SessionStore } from '../services/sqlite/SessionStore.js';
 import { getWorkerSocketPath } from '../shared/paths.js';
 import { buildInitPrompt, buildObservationPrompt, buildSummaryPrompt } from './prompts.js';
-
-/**
- * Find Claude Code executable dynamically
- */
-function findClaudeExecutable(): string {
-  // First check environment variable
-  if (process.env.CLAUDE_CODE_PATH) {
-    if (existsSync(process.env.CLAUDE_CODE_PATH)) {
-      return process.env.CLAUDE_CODE_PATH;
-    }
-    logger.warn('SYSTEM', 'CLAUDE_CODE_PATH set but file not found', { path: process.env.CLAUDE_CODE_PATH });
-  }
-
-  // Try using 'which' or 'where' command
-  try {
-    const command = platform() === 'win32' ? 'where claude' : 'which claude';
-    const result = execSync(command, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-    if (result && existsSync(result.split('\n')[0])) {
-      return result.split('\n')[0];
-    }
-  } catch (err) {
-    // Command failed, continue to search common paths
-  }
-
-  // Search common installation paths
-  const commonPaths = platform() === 'win32' ? [
-    join(homedir(), '.local', 'bin', 'claude.exe'),
-    join(homedir(), 'AppData', 'Local', 'Programs', 'claude', 'claude.exe'),
-    'C:\\Program Files\\Claude\\claude.exe',
-  ] : [
-    '/usr/local/bin/claude',
-    '/usr/bin/claude',
-    join(homedir(), '.local', 'bin', 'claude'),
-    join(homedir(), 'bin', 'claude'),
-  ];
-
-  for (const path of commonPaths) {
-    if (existsSync(path)) {
-      logger.info('SYSTEM', 'Found Claude executable', { path });
-      return path;
-    }
-  }
-
-  // Not found
-  throw new Error(
-    'Claude Code executable not found. Please either:\n' +
-    '  1. Ensure "claude" is in your PATH\n' +
-    '  2. Set CLAUDE_CODE_PATH environment variable to the full path to claude executable\n' +
-    '  3. Install Claude Code via the official installer'
-  );
-}
 import { parseObservations, parseSummary } from './parser.js';
 import type { SDKSession } from './prompts.js';
+
 
 const MODEL = 'claude-sonnet-4-5';
 const DISALLOWED_TOOLS = ['Glob', 'Grep', 'ListMcpResourcesTool', 'WebSearch'];
@@ -505,9 +454,9 @@ class SDKWorker {
           sdkSessionId: this.sdkSessionId,
           project: this.project,
           observationType: obs.type,
-          observationTextLength: obs.text?.length || 0
+          observationNarrativeLength: obs.narrative?.length || 0
         });
-        this.db.storeObservation(this.sdkSessionId, this.project, obs.type, obs.text);
+        this.db.storeObservation(this.sdkSessionId, this.project, obs);
       } else {
         console.error('[claude-mem worker] Cannot store observation - no SDK session ID', {
           sessionDbId: this.sessionDbId,
@@ -532,21 +481,7 @@ class SDKWorker {
         hasInvestigated: !!summary.investigated,
         hasLearned: !!summary.learned,
         hasCompleted: !!summary.completed,
-        filesReadCount: summary.files_read?.length || 0,
-        filesEditedCount: summary.files_edited?.length || 0
       });
-
-      // Convert file arrays to JSON strings
-      const summaryWithArrays = {
-        request: summary.request,
-        investigated: summary.investigated,
-        learned: summary.learned,
-        completed: summary.completed,
-        next_steps: summary.next_steps,
-        files_read: JSON.stringify(summary.files_read),
-        files_edited: JSON.stringify(summary.files_edited),
-        notes: summary.notes
-      };
 
       console.error('[claude-mem worker] Storing summary in database', {
         sessionDbId: this.sessionDbId,
@@ -554,7 +489,7 @@ class SDKWorker {
         project: this.project
       });
 
-      this.db.storeSummary(this.sdkSessionId, this.project, summaryWithArrays);
+      this.db.storeSummary(this.sdkSessionId, this.project, summary);
 
       console.error('[claude-mem worker] Summary stored successfully in database', {
         sessionDbId: this.sessionDbId,
