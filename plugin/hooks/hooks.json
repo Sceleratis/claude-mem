@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/setup-hook.sh",
+            "command": "bash -c 'SCRIPT=$(echo \"${CLAUDE_PLUGIN_ROOT}\" | sed \"s|\\\\|/|g\" | sed \"s|^C:|/c|i\"); bash \"$SCRIPT/scripts/setup-hook.sh\"'",
             "timeout": 120
           }
         ]
