@@ -9,3 +9,4 @@ node_modules/
 plugin/data/
 plugin/data.backup/
 /.history
+/.lh
