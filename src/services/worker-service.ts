@@ -372,9 +372,10 @@ class WorkerService {
     logger.info('SDK', 'Agent starting', { sessionId: session.sessionDbId });
 
     const claudePath = findClaudeExecutable();
+    let queryResult: AsyncIterable<any> | null = null;
 
     try {
-      const queryResult = query({
+      queryResult = query({
         prompt: this.createMessageGenerator(session),
         options: {
           model: MODEL,
@@ -444,6 +445,17 @@ class WorkerService {
         logger.failure('SDK', 'Agent error', { sessionId: session.sessionDbId }, error);
       }
       throw error;
+    } finally {
+      // CRITICAL: Cleanup the async iterable to terminate spawned child processes
+      if (queryResult && typeof (queryResult as any).return === 'function') {
+        try {
+          logger.debug('SDK', 'Cleaning up query result iterator', { sessionId: session.sessionDbId });
+          await (queryResult as any).return();
+          logger.debug('SDK', 'Query result iterator cleaned up', { sessionId: session.sessionDbId });
+        } catch (cleanupError) {
+          logger.warn('SDK', 'Error during iterator cleanup', { sessionId: session.sessionDbId }, cleanupError);
+        }
+      }
     }
   }
 
@@ -598,16 +610,50 @@ async function main() {
   const service = new WorkerService();
   await service.start();
 
-  // Graceful shutdown
-  process.on('SIGINT', () => {
-    logger.warn('SYSTEM', 'Shutting down (SIGINT)');
-    process.exit(0);
-  });
+  // Graceful shutdown - cleanup all active sessions before exiting
+  const shutdown = async (signal: string) => {
+    logger.warn('SYSTEM', `Shutting down (${signal})`);
 
-  process.on('SIGTERM', () => {
-    logger.warn('SYSTEM', 'Shutting down (SIGTERM)');
+    try {
+      // Get all active session IDs
+      const sessionIds = Array.from(service['sessions'].keys());
+
+      if (sessionIds.length > 0) {
+        logger.info('SYSTEM', `Cleaning up ${sessionIds.length} active session(s)...`);
+
+        // Abort all active sessions
+        const cleanupPromises = sessionIds.map(async (sessionDbId) => {
+          const session = service['sessions'].get(sessionDbId);
+          if (session) {
+            logger.debug('SYSTEM', 'Aborting session', { sessionId: sessionDbId });
+            session.abortController.abort();
+
+            // Wait for generator to finish (with timeout)
+            if (session.generatorPromise) {
+              await Promise.race([
+                session.generatorPromise.catch(() => {}), // Ignore errors during shutdown
+                new Promise(resolve => setTimeout(resolve, 3000))
+              ]);
+            }
+          }
+        });
+
+        await Promise.all(cleanupPromises);
+        logger.success('SYSTEM', 'All sessions cleaned up');
+      }
+
+      // Give Express a moment to finish pending responses
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+    } catch (error) {
+      logger.failure('SYSTEM', 'Error during shutdown cleanup', {}, error);
+    }
+
     process.exit(0);
-  });
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 // Auto-start when run directly (not when imported)

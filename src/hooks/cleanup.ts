@@ -71,7 +71,28 @@ export async function cleanupHook(input?: SessionEndInput): Promise<void> {
       worker_port: session.worker_port
     });
 
-    // 1. Mark session as completed in DB (if not already completed)
+    // 1. Request worker to abort and cleanup SDK agent
+    // This ensures spawned child processes are properly terminated
+    if (workerReady && session.worker_port) {
+      try {
+        console.error('[claude-mem cleanup] Requesting worker to cleanup SDK agent');
+        const cleanupResponse = await fetch(`http://127.0.0.1:${session.worker_port}/sessions/${session.id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (cleanupResponse.ok) {
+          console.error('[claude-mem cleanup] Worker cleanup completed successfully');
+        } else {
+          const errorText = await cleanupResponse.text();
+          console.error('[claude-mem cleanup] Worker cleanup failed:', errorText);
+        }
+      } catch (cleanupErr: any) {
+        console.error('[claude-mem cleanup] Failed to call worker cleanup endpoint:', cleanupErr.message);
+      }
+    }
+
+    // 2. Mark session as completed in DB (if not already completed)
     try {
       db.markSessionCompleted(session.id);
       console.error('[claude-mem cleanup] Session marked as completed in database');
