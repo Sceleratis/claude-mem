@@ -1,0 +1,30 @@
+{
+    "sourceFile": ".claude-plugin/marketplace.json",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 3,
+            "patches": [
+                {
+                    "date": 1761244391790,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                },
+                {
+                    "date": 1761254224979,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -9,9 +9,9 @@\n   },\r\n   \"plugins\": [\r\n     {\r\n       \"name\": \"claude-mem\",\r\n-      \"version\": \"4.2.6\",\r\n+      \"version\": \"4.2.7\",\r\n       \"source\": \"./plugin\",\r\n       \"description\": \"Persistent memory system for Claude Code - context compression across sessions\"\r\n     }\r\n   ]\r\n"
+                },
+                {
+                    "date": 1761257435562,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -9,9 +9,9 @@\n   },\r\n   \"plugins\": [\r\n     {\r\n       \"name\": \"claude-mem\",\r\n-      \"version\": \"4.2.7\",\r\n+      \"version\": \"4.2.8\",\r\n       \"source\": \"./plugin\",\r\n       \"description\": \"Persistent memory system for Claude Code - context compression across sessions\"\r\n     }\r\n   ]\r\n"
+                },
+                {
+                    "date": 1761416041576,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -0,0 +1,18 @@\n+{\r\n+  \"name\": \"claude-mem-fork\",\r\n+  \"owner\": {\r\n+    \"name\": \"Alex Newman\"\r\n+  },\r\n+  \"metadata\": {\r\n+    \"description\": \"Plugins by Alex Newman (thedotmack)\",\r\n+    \"homepage\": \"https://github.com/Sceleratis/claude-mem\"\r\n+  },\r\n+  \"plugins\": [\r\n+    {\r\n+      \"name\": \"claude-mem\",\r\n+      \"version\": \"4.2.9\",\r\n+      \"source\": \"./plugin\",\r\n+      \"description\": \"Persistent memory system for Claude Code - context compression across sessions\"\r\n+    }\r\n+  ]\r\n+}\r\n"
+                }
+            ],
+            "date": 1761244391790,
+            "name": "Commit-0",
+            "content": "{\r\n  \"name\": \"claude-mem-fork\",\r\n  \"owner\": {\r\n    \"name\": \"Alex Newman\"\r\n  },\r\n  \"metadata\": {\r\n    \"description\": \"Plugins by Alex Newman (thedotmack)\",\r\n    \"homepage\": \"https://github.com/Sceleratis/claude-mem\"\r\n  },\r\n  \"plugins\": [\r\n    {\r\n      \"name\": \"claude-mem\",\r\n      \"version\": \"4.2.6\",\r\n      \"source\": \"./plugin\",\r\n      \"description\": \"Persistent memory system for Claude Code - context compression across sessions\"\r\n    }\r\n  ]\r\n}\r\n"
+        }
+    ]
+}

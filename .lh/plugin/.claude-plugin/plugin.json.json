@@ -1,0 +1,26 @@
+{
+    "sourceFile": "plugin/.claude-plugin/plugin.json",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 2,
+            "patches": [
+                {
+                    "date": 1761257449232,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                },
+                {
+                    "date": 1761416033191,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -1,7 +1,7 @@\n {\r\n   \"name\": \"claude-mem\",\r\n-  \"version\": \"4.1.1\",\r\n+  \"version\": \"4.1.2\",\r\n   \"description\": \"Persistent memory system for Claude Code - seamlessly preserve context across sessions\",\r\n   \"author\": {\r\n     \"name\": \"Alex Newman\"\r\n   },\r\n"
+                },
+                {
+                    "date": 1761416052682,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -1,7 +1,7 @@\n {\r\n   \"name\": \"claude-mem\",\r\n-  \"version\": \"4.1.2\",\r\n+  \"version\": \"4.1.9\",\r\n   \"description\": \"Persistent memory system for Claude Code - seamlessly preserve context across sessions\",\r\n   \"author\": {\r\n     \"name\": \"Alex Newman\"\r\n   },\r\n"
+                }
+            ],
+            "date": 1761257449232,
+            "name": "Commit-0",
+            "content": "{\r\n  \"name\": \"claude-mem\",\r\n  \"version\": \"4.1.1\",\r\n  \"description\": \"Persistent memory system for Claude Code - seamlessly preserve context across sessions\",\r\n  \"author\": {\r\n    \"name\": \"Alex Newman\"\r\n  },\r\n  \"repository\": \"https://github.com/thedotmack/claude-mem\",\r\n  \"license\": \"AGPL-3.0\",\r\n  \"keywords\": [\r\n    \"memory\",\r\n    \"context\",\r\n    \"persistence\",\r\n    \"hooks\",\r\n    \"mcp\"\r\n  ]\r\n}\r\n"
+        }
+    ]
+}

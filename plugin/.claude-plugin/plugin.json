@@ -1,11 +1,11 @@
 {
-  "name": "claude-mem",
-  "version": "4.1.0",
+  "name": "claude-mem (fork)",
+  "version": "4.1.9",
   "description": "Persistent memory system for Claude Code - seamlessly preserve context across sessions",
   "author": {
-    "name": "Alex Newman"
+    "name": "Alex Newman (Original project), Sceleratis (This fork)"
   },
-  "repository": "https://github.com/thedotmack/claude-mem",
+  "repository": "https://github.com/Sceleratis/claude-code-stuff",
   "license": "AGPL-3.0",
   "keywords": [
     "memory",
